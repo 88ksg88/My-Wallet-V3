@@ -3,6 +3,7 @@ const EthTxBuilder = require('./eth-tx-builder');
 const EthWalletTx = require('./eth-wallet-tx');
 const API = require('../api');
 const { toBigNumber, toWei, fromWei } = require('../helpers');
+const EthShiftPayment = require('../shift/eth-payment');
 
 class EthAccount {
   constructor (obj) {
@@ -20,6 +21,10 @@ class EthAccount {
 
   get address () {
     return this._addr;
+  }
+
+  get receiveAddress () {
+    return this.address;
   }
 
   get privateKey () {
@@ -44,6 +49,10 @@ class EthAccount {
 
   get nonce () {
     return this._nonce;
+  }
+
+  get coinCode () {
+    return 'eth';
   }
 
   markAsCorrect () {
@@ -133,6 +142,10 @@ class EthAccount {
       let amount = parseFloat(fromWei(available, 'ether'));
       resolve({ amount, fee: fromWei(fee, 'ether') });
     });
+  }
+
+  createShiftPayment (wallet) {
+    return EthShiftPayment.fromWallet(wallet, this);
   }
 
   static privateKeyToAddress (privateKey) {

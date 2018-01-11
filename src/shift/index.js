@@ -3,8 +3,6 @@ const { delay, asyncOnce, trace } = require('../helpers')
 const Api = require('./api')
 const Trade = require('./trade')
 const Quote = require('./quote')
-const BtcPayment = require('./btc-payment')
-const EthPayment = require('./eth-payment')
 
 const METADATA_TYPE_SHAPE_SHIFT = 6;
 
@@ -30,38 +28,35 @@ class ShapeShift {
     return this._api.getRate(coinPair)
   }
 
-  getQuote (coinPair, amount) {
+  getQuote (from, to, amount) {
     trace('getting quote')
-    let [from, to] = coinPair.split('_')
 
-    let withdrawalAddress = this.nextAddressForCurrency(to)
-    let returnAddress = this.nextAddressForCurrency(from)
+    let returnAddress = from.receiveAddress;
+    let withdrawalAddress = to.receiveAddress;
+    let coinPair = from.coinCode + '_' + to.coinCode;
 
     return this._api.getQuote(coinPair, amount, withdrawalAddress, returnAddress)
       .then(Quote.fromApiResponse)
   }
 
-  getApproximateQuote (coinPair, amount) {
+  getApproximateQuote (from, to, amount) {
     trace('getting approximate quote')
+
+    let coinPair = from.coinCode + '_' + to.coinCode;
+
     return this._api.getQuote(coinPair, amount)
       .then(Quote.fromApiResponse)
   }
 
-  buildPayment (quote, fee) {
+  buildPayment (quote, fee, fromAccount) {
     trace('building payment')
-    let payment
     if (quote.depositAddress == null) {
       throw new Error('Quote is missing deposit address')
     }
-    if (quote.fromCurrency === 'btc') {
-      payment = BtcPayment.fromWallet(this._wallet)
+    if (fromAccount.coinCode !== quote.fromCurrency) {
+      throw new Error('Sending account currency does not match quote deposit currency')
     }
-    if (quote.fromCurrency === 'eth') {
-      payment = EthPayment.fromWallet(this._wallet)
-    }
-    if (payment == null) {
-      throw new Error(`Tried to build for unsupported currency ${quote.fromCurrency}`)
-    }
+    let payment = fromAccount.createShiftPayment(this._wallet)
     return payment.setFromQuote(quote, fee)
   }
 
@@ -69,7 +64,9 @@ class ShapeShift {
     trace('starting shift')
     return payment.publish(secPass).then(({ hash }) => {
       trace('finished shift')
-      payment.saveWithdrawalLabel()
+      if (payment.quote.toCurrency === 'btc') {
+        this.saveBtcWithdrawalLabel(payment.quote)
+      }
       let trade = Trade.fromQuote(payment.quote)
       trade.setDepositHash(hash)
       this._trades.unshift(trade)
@@ -109,14 +106,10 @@ class ShapeShift {
     return Promise.all(requests);
   }
 
-  nextAddressForCurrency (currency) {
-    if (currency === 'btc') {
-      return this._wallet.hdwallet.defaultAccount.receiveAddress
-    }
-    if (currency === 'eth') {
-      return this._wallet.eth.defaultAccount.address
-    }
-    throw new Error(`Currency '${currency}' is not supported`)
+  saveBtcWithdrawalLabel (quote) {
+    let label = `ShapeShift order #${quote.orderId}`
+    let account = this._wallet.hdwallet.defaultAccount
+    account.setLabel(account.receiveIndex, label)
   }
 
   setUSAState (state) {
