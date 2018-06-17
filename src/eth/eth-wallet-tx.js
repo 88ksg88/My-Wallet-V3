@@ -58,6 +58,10 @@ class EthWalletTx {
     return this._note;
   }
 
+  get coinCode () {
+    return 'eth';
+  }
+
   getTxType (accounts) {
     accounts = toArrayFormat(accounts);
     let incoming = accounts.some(a => this.isToAccount(a));
@@ -77,7 +81,7 @@ class EthWalletTx {
   }
 
   update (ethWallet) {
-    this._confirmations = Math.max(ethWallet.latestBlock - this._blockNumber + 1, 0);
+    this._confirmations = Math.max(ethWallet.latestBlock - this._blockNumber + 1, 0) || 0;
     this._note = ethWallet.getTxNote(this.hash);
   }
 

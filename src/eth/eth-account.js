@@ -3,6 +3,7 @@ const EthTxBuilder = require('./eth-tx-builder');
 const EthWalletTx = require('./eth-wallet-tx');
 const API = require('../api');
 const { toBigNumber, toWei, fromWei } = require('../helpers');
+const EthShiftPayment = require('../shift/eth-payment');
 
 class EthAccount {
   constructor (obj) {
@@ -20,6 +21,10 @@ class EthAccount {
 
   get address () {
     return this._addr;
+  }
+
+  get receiveAddress () {
+    return this.address;
   }
 
   get privateKey () {
@@ -44,6 +49,10 @@ class EthAccount {
 
   get nonce () {
     return this._nonce;
+  }
+
+  get coinCode () {
+    return 'eth';
   }
 
   markAsCorrect () {
@@ -105,6 +114,14 @@ class EthAccount {
     return txns;
   }
 
+  updateFromIncomingTx (tx) {
+    if (tx.type === 'confirmed') {
+      this.fetchBalance();
+    } else if (tx.type === 'pending') {
+      EthWalletTx.fromJSON(tx);
+    }
+  }
+
   updateTxs (ethWallet) {
     this.txs.forEach(tx => tx.update(ethWallet));
   }
@@ -135,6 +152,10 @@ class EthAccount {
     });
   }
 
+  createShiftPayment (wallet) {
+    return EthShiftPayment.fromWallet(wallet, this);
+  }
+
   static privateKeyToAddress (privateKey) {
     return ethUtil.toChecksumAddress(ethUtil.privateToAddress(privateKey).toString('hex'));
   }
@@ -148,6 +169,13 @@ class EthAccount {
     let addr = EthAccount.privateKeyToAddress(wallet.getPrivateKey());
     let account = new EthAccount({ addr });
     account.setData({ balance: '0', nonce: 0 });
+    return account;
+  }
+
+  static fromMew (seed) {
+    let addr = ethUtil.privateToAddress(seed).toString('hex');
+    let priv = seed;
+    let account = new EthAccount({ priv, addr });
     return account;
   }
 }
